@@ -1,0 +1,6 @@
+{
+  "name": "Digital Heroes",
+  "description": "Digital Heroes Golf & Charity Platform - abhaybhuj.assignment.golfncharity evaluation build with Stableford score tracking, monthly draws, and charity giving.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
