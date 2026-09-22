@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ShieldCheck, User, Globe, RotateCcw, Sparkles, LogIn, UserPlus, Copy, Check, Database, RefreshCw, AlertCircle, Key, ExternalLink } from 'lucide-react';
 import { UserRole, NavigationTab } from '../types';
+import { INITIAL_CHARITIES } from '../data/initialData';
 import { supabase, isSupabaseConfigured, getSupabaseConfig, createLiveSupabaseClient, sanitizeSupabaseUrl, sanitizeAnonKey } from '../lib/supabaseClient';
 
 interface RoleSwitcherBarProps {
@@ -135,8 +136,10 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
     try {
       showToast('Syncing charities, member profiles & scores to Supabase...');
 
-      // 0. Upsert charities first so foreign keys (profiles.charity_id -> charities.id) are satisfied
-      const charityRows = (charities || []).map(c => ({
+      // Fallback to INITIAL_CHARITIES if context charities list is empty
+      const listToSeed = (charities && charities.length > 0) ? charities : INITIAL_CHARITIES;
+      
+      const charityRows = listToSeed.map(c => ({
         id: c.id,
         name: c.name,
         tagline: c.tagline || '',
@@ -149,35 +152,44 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
         is_featured: Boolean(c.isFeatured)
       }));
 
-      if (charityRows.length > 0) {
-        const { error: charityErr } = await client.from('charities').upsert(charityRows, { onConflict: 'id' });
-        if (charityErr) {
-          console.warn('Charity upsert notice:', charityErr.message);
-          // If charities fails with RLS as well, report clearly
-          if (charityErr.message.includes('row-level security')) {
-            throw new Error(`Charities RLS blocked: Please disable RLS or allow insert on 'charities' table.`);
-          }
-        }
+      // Upsert charities and strictly verify
+      const { error: charityErr } = await client.from('charities').upsert(charityRows, { onConflict: 'id' });
+      if (charityErr) {
+        console.error('Charities upsert failed:', charityErr);
+        throw new Error(`Charities table rejected write: ${charityErr.message}. Make sure RLS is disabled on charities table.`);
       }
 
-      // 1. Prepare profile rows
-      const profileRows = allSubscribers.map(u => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        avatar_url: u.avatarUrl,
-        home_club: u.homeClub,
-        handicap: u.handicap,
-        subscription_status: u.subscription.status,
-        subscription_plan: u.subscription.plan,
-        subscription_amount: u.subscription.amount,
-        renewal_date: u.subscription.renewalDate,
-        charity_id: u.charityId || null,
-        charity_percentage: u.charityPercentage,
-        total_donated: u.totalDonated,
-        draws_entered_count: u.drawsEnteredCount
-      }));
+      // Check which charity IDs currently exist in the Supabase charities table
+      const { data: existingCharityData, error: charityFetchErr } = await client.from('charities').select('id');
+      if (charityFetchErr) {
+        console.warn('Could not query charities table:', charityFetchErr.message);
+      }
+      const existingCharityIdSet = new Set((existingCharityData || []).map(r => r.id));
+
+      // 1. Prepare profile rows - ensure charity_id is valid in Supabase charities table or set to null
+      const profileRows = allSubscribers.map(u => {
+        const validCharityId = (u.charityId && (existingCharityIdSet.size === 0 || existingCharityIdSet.has(u.charityId)))
+          ? u.charityId
+          : null;
+
+        return {
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          avatar_url: u.avatarUrl,
+          home_club: u.homeClub,
+          handicap: u.handicap,
+          subscription_status: u.subscription.status,
+          subscription_plan: u.subscription.plan,
+          subscription_amount: u.subscription.amount,
+          renewal_date: u.subscription.renewalDate,
+          charity_id: validCharityId,
+          charity_percentage: u.charityPercentage,
+          total_donated: u.totalDonated,
+          draws_entered_count: u.drawsEnteredCount
+        };
+      });
 
       // Upsert profiles
       const { error: profileErr } = await client.from('profiles').upsert(profileRows, { onConflict: 'id' });
