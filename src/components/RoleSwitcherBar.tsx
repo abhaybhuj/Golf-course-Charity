@@ -10,7 +10,7 @@ interface RoleSwitcherBarProps {
 }
 
 export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, onNavigateTab }) => {
-  const { role, setRole, resetToDefaultData, currentUser, showToast, isSupabaseConnected } = useApp();
+  const { role, setRole, resetToDefaultData, currentUser, allSubscribers, charities, showToast, isSupabaseConnected } = useApp();
   const [copied, setCopied] = React.useState(false);
 
   const [showTestModal, setShowTestModal] = useState(false);
@@ -115,6 +115,77 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
       }));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const [seeding, setSeeding] = useState(false);
+
+  const seedAllProfilesToSupabase = async () => {
+    setSeeding(true);
+    const rawUrl = customUrl || import.meta.env.VITE_SUPABASE_URL || 'https://hsujhwellraoznlmrqvc.supabase.co';
+    const rawKey = customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+    const client = createLiveSupabaseClient(rawUrl, rawKey);
+
+    if (!client) {
+      setSeeding(false);
+      showToast('Please provide your anon key first.');
+      return;
+    }
+
+    try {
+      showToast('Syncing all member profiles & scores to Supabase...');
+
+      // 1. Prepare profile rows
+      const profileRows = allSubscribers.map(u => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        avatar_url: u.avatarUrl,
+        home_club: u.homeClub,
+        handicap: u.handicap,
+        subscription_status: u.subscription.status,
+        subscription_plan: u.subscription.plan,
+        subscription_amount: u.subscription.amount,
+        renewal_date: u.subscription.renewalDate,
+        charity_id: u.charityId,
+        charity_percentage: u.charityPercentage,
+        total_donated: u.totalDonated,
+        draws_entered_count: u.drawsEnteredCount
+      }));
+
+      // Upsert profiles
+      const { error: profileErr } = await client.from('profiles').upsert(profileRows, { onConflict: 'id' });
+      if (profileErr) {
+        throw new Error(`Profile sync failed: ${profileErr.message}`);
+      }
+
+      // 2. Prepare score rows for all members
+      const scoreRows = allSubscribers.flatMap(u => 
+        (u.scores || []).map(s => ({
+          id: s.id,
+          user_id: u.id,
+          points: s.points,
+          score_date: s.date,
+          course_name: s.courseName || u.homeClub || 'Home Club',
+          notes: s.notes || 'Official scorecard entry'
+        }))
+      );
+
+      if (scoreRows.length > 0) {
+        const { error: scoreErr } = await client.from('golf_scores').upsert(scoreRows, { onConflict: 'id' });
+        if (scoreErr) {
+          console.warn('Score upsert note:', scoreErr.message);
+        }
+      }
+
+      showToast(`🎉 Success! Synced ${profileRows.length} profiles & ${scoreRows.length} scores directly to Supabase.`);
+      // Re-run test to show updated status
+      runConnectionTest();
+    } catch (err: unknown) {
+      showToast(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -383,16 +454,30 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800 gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => runConnectionTest()}
+                  disabled={testing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
+                  {testing ? 'Testing...' : 'Ping Tables'}
+                </button>
+                <button
+                  type="button"
+                  onClick={seedAllProfilesToSupabase}
+                  disabled={seeding || testing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-50"
+                  title="Upload all profiles and scores to Supabase"
+                >
+                  <Database className={`w-3.5 h-3.5 ${seeding ? 'animate-bounce' : ''}`} />
+                  {seeding ? 'Syncing...' : 'Sync Data to Supabase'}
+                </button>
+              </div>
               <button
-                onClick={() => runConnectionTest()}
-                disabled={testing}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-                {testing ? 'Testing...' : 'Ping Endpoints'}
-              </button>
-              <button
+                type="button"
                 onClick={() => setShowTestModal(false)}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs cursor-pointer"
               >
