@@ -165,8 +165,9 @@ CREATE POLICY "Golf scores readable" ON public.golf_scores FOR SELECT USING (tru
 CREATE POLICY "Golf scores insertable by user" ON public.golf_scores FOR INSERT WITH CHECK (true);
 CREATE POLICY "Golf scores deletable by user" ON public.golf_scores FOR DELETE USING (true);
 
--- Profiles readable and updatable
+-- Profiles readable, insertable (on signup), and updatable
 CREATE POLICY "Profiles readable" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles insertable" ON public.profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "Profiles updatable" ON public.profiles FOR UPDATE USING (true);
 
 -- --------------------------------------------------------------------

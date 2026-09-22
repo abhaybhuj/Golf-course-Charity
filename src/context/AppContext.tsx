@@ -244,6 +244,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       prev.map(c => c.id === payload.charityId ? { ...c, totalRaised: c.totalRaised + charityCut } : c)
     );
 
+    // Sync to Supabase profiles and golf_scores if configured
+    if (supabase && isSupabaseConfigured) {
+      Promise.resolve(
+        supabase
+          .from('profiles')
+          .upsert({
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name,
+            role: newUser.role,
+            avatar_url: newUser.avatarUrl,
+            home_club: newUser.homeClub,
+            handicap: newUser.handicap,
+            subscription_status: newUser.subscription.status,
+            subscription_plan: newUser.subscription.plan,
+            subscription_amount: newUser.subscription.amount,
+            renewal_date: newUser.subscription.renewalDate,
+            charity_id: newUser.charityId,
+            charity_percentage: newUser.charityPercentage,
+            total_donated: newUser.totalDonated,
+            draws_entered_count: newUser.drawsEnteredCount
+          })
+      )
+        .then(result => {
+          if (result && result.error) {
+            console.error('Supabase profile creation error:', result.error.message);
+          } else {
+            console.log('✅ Supabase profile saved successfully for:', newUser.email);
+            // Also insert initial scores
+            const client = supabase;
+            if (client) {
+              const scoreRows = initialScores.map(s => ({
+                id: s.id,
+                user_id: newUser.id,
+                points: s.points,
+                score_date: s.date,
+                course_name: s.courseName || newUser.homeClub,
+                notes: s.notes || 'Initial handicap round'
+              }));
+              return client.from('golf_scores').insert(scoreRows);
+            }
+            return null;
+          }
+        })
+        .then(scoreResult => {
+          if (scoreResult && scoreResult.error) {
+            console.warn('Initial scores sync warning:', scoreResult.error.message);
+          }
+        })
+        .catch((err: unknown) => console.error('Supabase profile sync error:', err));
+    }
+
     showToast(`Welcome to Digital Heroes, ${newUser.name}! Your account is active and entered into the ${activeDrawMonth} draw.`);
     return newUser;
   };

@@ -9,7 +9,7 @@ interface RoleSwitcherBarProps {
 }
 
 export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, onNavigateTab }) => {
-  const { role, setRole, resetToDefaultData, currentUser, showToast } = useApp();
+  const { role, setRole, resetToDefaultData, currentUser, showToast, isSupabaseConnected } = useApp();
   const [copied, setCopied] = React.useState(false);
 
   const handleCopyAssignmentUrl = () => {
@@ -43,7 +43,10 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
           </div>
           <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
             <span className="text-slate-500">Backend:</span>
-            <span className="text-cyan-400 font-semibold">Supabase (PostgreSQL)</span>
+            <span className={isSupabaseConnected ? "text-emerald-400 font-semibold flex items-center gap-1" : "text-amber-400 font-semibold flex items-center gap-1"}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+              {isSupabaseConnected ? 'Supabase Live' : 'Supabase (Awaiting Keys)'}
+            </span>
           </div>
           <button
             onClick={handleCopyAssignmentUrl}
