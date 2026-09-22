@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShieldCheck, User, Globe, RotateCcw, Sparkles, LogIn, UserPlus, Copy, Check } from 'lucide-react';
+import { ShieldCheck, User, Globe, RotateCcw, Sparkles, LogIn, UserPlus, Copy, Check, Database, RefreshCw, AlertCircle, Key, ExternalLink } from 'lucide-react';
 import { UserRole, NavigationTab } from '../types';
+import { supabase, isSupabaseConfigured, getSupabaseConfig, createLiveSupabaseClient } from '../lib/supabaseClient';
 
 interface RoleSwitcherBarProps {
   currentTab?: NavigationTab;
@@ -11,6 +12,104 @@ interface RoleSwitcherBarProps {
 export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, onNavigateTab }) => {
   const { role, setRole, resetToDefaultData, currentUser, showToast, isSupabaseConnected } = useApp();
   const [copied, setCopied] = React.useState(false);
+
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResults, setTestResults] = useState<{
+    envDetected: boolean;
+    urlPreview: string;
+    canPingCharities: boolean | null;
+    canPingProfiles: boolean | null;
+    canPingScores: boolean | null;
+    details: string;
+  }>({
+    envDetected: isSupabaseConfigured,
+    urlPreview: import.meta.env.VITE_SUPABASE_URL || 'Not provided',
+    canPingCharities: null,
+    canPingProfiles: null,
+    canPingScores: null,
+    details: ''
+  });
+
+  const [customUrl, setCustomUrl] = useState(() => {
+    return localStorage.getItem('supabase_custom_url') || import.meta.env.VITE_SUPABASE_URL || 'https://hsujhwellraoznlmrqvc.supabase.co';
+  });
+  const [customKey, setCustomKey] = useState(() => {
+    return localStorage.getItem('supabase_custom_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  });
+
+  const saveAndApplyKeys = () => {
+    if (customUrl) localStorage.setItem('supabase_custom_url', customUrl.trim());
+    if (customKey) localStorage.setItem('supabase_custom_key', customKey.trim());
+    showToast('Saved Supabase credentials! Re-testing...');
+    runConnectionTest(customUrl.trim(), customKey.trim());
+  };
+
+  const runConnectionTest = async (overrideUrl?: string, overrideKey?: string) => {
+    setTesting(true);
+    const activeUrl = overrideUrl || customUrl || import.meta.env.VITE_SUPABASE_URL || 'https://hsujhwellraoznlmrqvc.supabase.co';
+    const activeKey = overrideKey || customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    setTestResults({
+      envDetected: Boolean(activeUrl && activeKey),
+      urlPreview: activeUrl,
+      canPingCharities: null,
+      canPingProfiles: null,
+      canPingScores: null,
+      details: 'Pinging Supabase REST endpoints...'
+    });
+
+    if (!activeUrl || !activeKey) {
+      setTesting(false);
+      setTestResults(prev => ({
+        ...prev,
+        details: 'Missing Anon Key. Please paste your anon public key below and click "Save & Test".'
+      }));
+      return;
+    }
+
+    try {
+      const client = createLiveSupabaseClient(activeUrl, activeKey);
+      if (!client) {
+        throw new Error('Could not initialize Supabase client with given credentials.');
+      }
+
+      // Test 1: Charities table
+      const charitiesRes = await client.from('charities').select('id, name').limit(1);
+      const pingCharities = !charitiesRes.error;
+
+      // Test 2: Profiles table
+      const profilesRes = await client.from('profiles').select('id').limit(1);
+      const pingProfiles = !profilesRes.error;
+
+      // Test 3: Golf scores table
+      const scoresRes = await client.from('golf_scores').select('id').limit(1);
+      const pingScores = !scoresRes.error;
+
+      const errors: string[] = [];
+      if (charitiesRes.error) errors.push(`charities: ${charitiesRes.error.message}`);
+      if (profilesRes.error) errors.push(`profiles: ${profilesRes.error.message}`);
+      if (scoresRes.error) errors.push(`golf_scores: ${scoresRes.error.message}`);
+
+      setTestResults({
+        envDetected: true,
+        urlPreview: activeUrl,
+        canPingCharities: pingCharities,
+        canPingProfiles: pingProfiles,
+        canPingScores: pingScores,
+        details: errors.length === 0 
+          ? '🎉 All 3 tables responded with HTTP 200 OK! Connection is healthy and active.' 
+          : `Some tables returned errors: ${errors.join(' | ')}`
+      });
+    } catch (err: unknown) {
+      setTestResults(prev => ({
+        ...prev,
+        details: `Connection request failed: ${err instanceof Error ? err.message : String(err)}`
+      }));
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleCopyAssignmentUrl = () => {
     const url = `${window.location.origin}/#abhaybhuj.assignment.golfncharity`;
@@ -41,13 +140,21 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
             <span className="text-slate-500">ID:</span>
             <span className="text-emerald-400 font-semibold">abhaybhuj.assignment.golfncharity</span>
           </div>
-          <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
+          <button
+            onClick={() => {
+              setShowTestModal(true);
+              runConnectionTest();
+            }}
+            className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 hover:border-slate-700 cursor-pointer transition-colors"
+            title="Click to test live Supabase connection"
+          >
+            <Database className="w-3 h-3 text-cyan-400" />
             <span className="text-slate-500">Backend:</span>
             <span className={isSupabaseConnected ? "text-emerald-400 font-semibold flex items-center gap-1" : "text-amber-400 font-semibold flex items-center gap-1"}>
               <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-              {isSupabaseConnected ? 'Supabase Live' : 'Supabase (Awaiting Keys)'}
+              {isSupabaseConnected ? 'Supabase Live (Test)' : 'Supabase (Test Connection)'}
             </span>
-          </div>
+          </button>
           <button
             onClick={handleCopyAssignmentUrl}
             className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 px-2 py-0.5 rounded hover:bg-slate-900 border border-slate-800/80 cursor-pointer transition-colors"
@@ -131,6 +238,163 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
           </button>
         </div>
       </div>
+
+      {/* Supabase Connection Test Diagnostics Modal */}
+      {showTestModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-lg w-full shadow-2xl text-slate-100">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Supabase Connection Diagnostics</h3>
+                  <p className="text-xs text-slate-400 font-mono">Live PostgreSQL ping check</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTestModal(false)}
+                className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-slate-800 cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="space-y-4 py-4 text-xs">
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono">
+                <div className="text-slate-400 text-[11px]">PROJECT URL:</div>
+                <div className="text-cyan-400 break-all font-semibold mt-0.5">{testResults.urlPreview}</div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-slate-300 font-semibold text-xs">Table Ping Tests:</div>
+
+                <div className="flex items-center justify-between p-2.5 rounded bg-slate-950 border border-slate-800">
+                  <span className="font-mono text-slate-300">1. charities (Directory)</span>
+                  {testResults.canPingCharities === null ? (
+                    <span className="text-slate-500 font-mono">Awaiting ping...</span>
+                  ) : testResults.canPingCharities ? (
+                    <span className="text-emerald-400 font-semibold font-mono flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> 200 OK
+                    </span>
+                  ) : (
+                    <span className="text-red-400 font-semibold font-mono flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> FAILED
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded bg-slate-950 border border-slate-800">
+                  <span className="font-mono text-slate-300">2. profiles (Golfers)</span>
+                  {testResults.canPingProfiles === null ? (
+                    <span className="text-slate-500 font-mono">Awaiting ping...</span>
+                  ) : testResults.canPingProfiles ? (
+                    <span className="text-emerald-400 font-semibold font-mono flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> 200 OK
+                    </span>
+                  ) : (
+                    <span className="text-red-400 font-semibold font-mono flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> FAILED
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded bg-slate-950 border border-slate-800">
+                  <span className="font-mono text-slate-300">3. golf_scores (Scorecards)</span>
+                  {testResults.canPingScores === null ? (
+                    <span className="text-slate-500 font-mono">Awaiting ping...</span>
+                  ) : testResults.canPingScores ? (
+                    <span className="text-emerald-400 font-semibold font-mono flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> 200 OK
+                    </span>
+                  ) : (
+                    <span className="text-red-400 font-semibold font-mono flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> FAILED
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Direct Key Configurator if environment variable isn't baked in */}
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
+                    Supabase Credentials Config:
+                  </span>
+                  <a
+                    href="https://supabase.com/dashboard/project/hsujhwellraoznlmrqvc/settings/api"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
+                  >
+                    Open Supabase Keys <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Project URL:</label>
+                  <input
+                    type="text"
+                    value={customUrl}
+                    onChange={e => setCustomUrl(e.target.value)}
+                    placeholder="https://your-id.supabase.co"
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Anon Public Key (starts with eyJhb...):</label>
+                  <input
+                    type="password"
+                    value={customKey}
+                    onChange={e => setCustomKey(e.target.value)}
+                    placeholder="Paste anon public key here..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveAndApplyKeys}
+                  className="w-full mt-1 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-slate-950 font-bold rounded text-xs transition-colors cursor-pointer"
+                >
+                  Save & Test Live Connection
+                </button>
+              </div>
+
+              <div className={`p-3 rounded-lg border text-[11px] ${
+                testResults.canPingCharities && testResults.canPingProfiles && testResults.canPingScores
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                  : testResults.details.includes('Missing Anon Key') || testResults.details.includes('No VITE_SUPABASE_URL')
+                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                  : 'bg-slate-950 border-slate-800 text-slate-400'
+              }`}>
+                <div className="font-semibold mb-0.5">Status Summary:</div>
+                <div className="break-words">{testResults.details || 'Click "Re-run Test" to ping all endpoints.'}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                onClick={() => runConnectionTest()}
+                disabled={testing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
+                {testing ? 'Testing...' : 'Ping Endpoints'}
+              </button>
+              <button
+                onClick={() => setShowTestModal(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,17 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Try environment variables first, then check localStorage config fallback
+const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Returns true if live Supabase credentials are provided in environment
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  supabaseUrl !== 'https://your-project.supabase.co' &&
-  supabaseAnonKey !== 'your-anon-key-here'
-);
+const storedUrl = typeof window !== 'undefined' ? localStorage.getItem('supabase_custom_url') || '' : '';
+const storedKey = typeof window !== 'undefined' ? localStorage.getItem('supabase_custom_key') || '' : '';
 
-// Lazy / safe initialization that won't crash if credentials aren't set in preview
+export const getSupabaseConfig = () => {
+  const url = (envUrl && envUrl !== 'https://your-project.supabase.co') 
+    ? envUrl 
+    : (storedUrl || 'https://hsujhwellraoznlmrqvc.supabase.co');
+  
+  const key = (envKey && envKey !== 'your-anon-key-here') 
+    ? envKey 
+    : storedKey;
+
+  const isConfigured = Boolean(url && key);
+  return { url, key, isConfigured };
+};
+
+const initialConfig = getSupabaseConfig();
+
+export const isSupabaseConfigured = initialConfig.isConfigured;
+
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(initialConfig.url, initialConfig.key)
   : null;
+
+export const createLiveSupabaseClient = (url: string, key: string) => {
+  if (!url || !key) return null;
+  return createClient(url, key);
+};
