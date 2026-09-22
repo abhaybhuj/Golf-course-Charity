@@ -273,13 +273,13 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
             className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 hover:border-slate-700 cursor-pointer transition-colors"
             title="Click to test live Supabase connection"
           >
-            <Database className="w-3 h-3 text-cyan-400" />
+         /*   <Database className="w-3 h-3 text-cyan-400" />
             <span className="text-slate-500">Backend:</span>
             <span className={isSupabaseConnected ? "text-emerald-400 font-semibold flex items-center gap-1" : "text-amber-400 font-semibold flex items-center gap-1"}>
               <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
               {isSupabaseConnected ? 'Supabase Live (Test)' : 'Supabase (Test Connection)'}
             </span>
-          </button>
+          </button>*/
           <button
             onClick={handleCopyAssignmentUrl}
             className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 px-2 py-0.5 rounded hover:bg-slate-900 border border-slate-800/80 cursor-pointer transition-colors"
