@@ -133,7 +133,32 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
     }
 
     try {
-      showToast('Syncing all member profiles & scores to Supabase...');
+      showToast('Syncing charities, member profiles & scores to Supabase...');
+
+      // 0. Upsert charities first so foreign keys (profiles.charity_id -> charities.id) are satisfied
+      const charityRows = (charities || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        tagline: c.tagline || '',
+        description: c.description || '',
+        category: c.category || 'General',
+        logo_url: c.logoUrl || null,
+        cover_image: c.coverImage || null,
+        website_url: c.websiteUrl || null,
+        total_raised: c.totalRaised || 0,
+        is_featured: Boolean(c.isFeatured)
+      }));
+
+      if (charityRows.length > 0) {
+        const { error: charityErr } = await client.from('charities').upsert(charityRows, { onConflict: 'id' });
+        if (charityErr) {
+          console.warn('Charity upsert notice:', charityErr.message);
+          // If charities fails with RLS as well, report clearly
+          if (charityErr.message.includes('row-level security')) {
+            throw new Error(`Charities RLS blocked: Please disable RLS or allow insert on 'charities' table.`);
+          }
+        }
+      }
 
       // 1. Prepare profile rows
       const profileRows = allSubscribers.map(u => ({
@@ -148,7 +173,7 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
         subscription_plan: u.subscription.plan,
         subscription_amount: u.subscription.amount,
         renewal_date: u.subscription.renewalDate,
-        charity_id: u.charityId,
+        charity_id: u.charityId || null,
         charity_percentage: u.charityPercentage,
         total_donated: u.totalDonated,
         draws_entered_count: u.drawsEnteredCount
@@ -183,7 +208,17 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
       // Re-run test to show updated status
       runConnectionTest();
     } catch (err: unknown) {
-      showToast(`Sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('row-level security') || msg.includes('violates row-level security')) {
+        setTestResults(prev => ({
+          ...prev,
+          details: '⚠️ Supabase RLS (Row Level Security) blocked the insert. Run the 1-line SQL snippet shown below in your Supabase SQL editor to allow inserts.'
+        }));
+        showToast('Sync blocked by RLS: Run the policy SQL in Supabase SQL Editor (see modal).');
+      } else {
+        setTestResults(prev => ({ ...prev, details: `Sync failed: ${msg}` }));
+        showToast(`Sync failed: ${msg}`);
+      }
     } finally {
       setSeeding(false);
     }
@@ -451,6 +486,35 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
               }`}>
                 <div className="font-semibold mb-0.5">Status Summary:</div>
                 <div className="break-words">{testResults.details || 'Click "Re-run Test" to ping all endpoints.'}</div>
+              </div>
+
+              {/* RLS Quick Fix instructions */}
+              <div className="bg-slate-950 p-3 rounded-lg border border-amber-500/30 text-[11px] space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Supabase Row Level Security (RLS) Fix:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sql = `-- Allow public app inserts & reads during evaluation\nALTER TABLE profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE golf_scores DISABLE ROW LEVEL SECURITY;\nALTER TABLE charities DISABLE ROW LEVEL SECURITY;`;
+                      if (navigator.clipboard) navigator.clipboard.writeText(sql);
+                      showToast('Copied RLS SQL Fix! Paste into Supabase SQL Editor and click Run.');
+                    }}
+                    className="text-[10px] px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded cursor-pointer"
+                  >
+                    Copy SQL Fix
+                  </button>
+                </div>
+                <p className="text-slate-400 text-[10px]">
+                  By default, Supabase enables RLS and blocks anon inserts until a policy is added or RLS is turned off for the table. Run this in your <strong className="text-slate-200">Supabase SQL Editor</strong>:
+                </p>
+                <pre className="bg-slate-900 border border-slate-800 rounded p-2 text-emerald-400 font-mono text-[10px] select-all overflow-x-auto">
+{`ALTER TABLE charities DISABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE golf_scores DISABLE ROW LEVEL SECURITY;`}
+                </pre>
               </div>
             </div>
 
