@@ -41,6 +41,10 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
             <span className="text-slate-500">ID:</span>
             <span className="text-emerald-400 font-semibold">abhaybhuj.assignment.golfncharity</span>
           </div>
+          <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
+            <span className="text-slate-500">Backend:</span>
+            <span className="text-cyan-400 font-semibold">Supabase (PostgreSQL)</span>
+          </div>
           <button
             onClick={handleCopyAssignmentUrl}
             className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 px-2 py-0.5 rounded hover:bg-slate-900 border border-slate-800/80 cursor-pointer transition-colors"

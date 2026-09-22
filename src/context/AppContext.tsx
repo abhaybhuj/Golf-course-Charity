@@ -21,6 +21,7 @@ import {
   INITIAL_PAST_DRAWS,
   INITIAL_DIRECT_DONATIONS
 } from '../data/initialData';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 interface AppContextType {
   // Role & Session
@@ -71,6 +72,7 @@ interface AppContextType {
   resetToDefaultData: () => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
+  isSupabaseConnected: boolean;
 }
 
 const STORAGE_KEY = 'digital_heroes_platform_state_v1';
@@ -419,6 +421,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAllSubscribers(prev =>
       prev.map(u => u.id === currentUser.id ? { ...u, scores: latest5 } : u)
     );
+
+    // If Supabase is configured, also persist score to Supabase database in background
+    if (supabase && isSupabaseConfigured) {
+      Promise.resolve(
+        supabase
+          .from('golf_scores')
+          .insert({
+            user_id: currentUser.id,
+            points,
+            score_date: date,
+            course_name: courseName?.trim() || null,
+            notes: notes?.trim() || null
+          })
+      )
+        .then(result => {
+          if (result && result.error) {
+            console.warn('Supabase score sync notice:', result.error.message);
+          }
+        })
+        .catch((err: unknown) => console.warn('Supabase sync error:', err));
+    }
 
     showToast(`Score of ${points} pts on ${date} logged! 5-score ticket updated.`);
     return { success: true };
@@ -942,7 +965,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         resetToDefaultData,
         toastMessage,
-        showToast
+        showToast,
+        isSupabaseConnected: isSupabaseConfigured
       }}
     >
       {children}
