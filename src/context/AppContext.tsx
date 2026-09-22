@@ -21,7 +21,7 @@ import {
   INITIAL_PAST_DRAWS,
   INITIAL_DIRECT_DONATIONS
 } from '../data/initialData';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured, getSupabaseConfig, createLiveSupabaseClient } from '../lib/supabaseClient';
 
 interface AppContextType {
   // Role & Session
@@ -245,9 +245,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     // Sync to Supabase profiles and golf_scores if configured
-    if (supabase && isSupabaseConfigured) {
+    const activeCfg = getSupabaseConfig();
+    const liveClient = activeCfg.isConfigured ? createLiveSupabaseClient(activeCfg.url, activeCfg.key) : null;
+
+    if (liveClient) {
       Promise.resolve(
-        supabase
+        liveClient
           .from('profiles')
           .upsert({
             id: newUser.id,
@@ -273,19 +276,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } else {
             console.log('✅ Supabase profile saved successfully for:', newUser.email);
             // Also insert initial scores
-            const client = supabase;
-            if (client) {
-              const scoreRows = initialScores.map(s => ({
-                id: s.id,
-                user_id: newUser.id,
-                points: s.points,
-                score_date: s.date,
-                course_name: s.courseName || newUser.homeClub,
-                notes: s.notes || 'Initial handicap round'
-              }));
-              return client.from('golf_scores').insert(scoreRows);
-            }
-            return null;
+            const scoreRows = initialScores.map(s => ({
+              id: s.id,
+              user_id: newUser.id,
+              points: s.points,
+              score_date: s.date,
+              course_name: s.courseName || newUser.homeClub,
+              notes: s.notes || 'Initial handicap round'
+            }));
+            return liveClient.from('golf_scores').insert(scoreRows);
           }
         })
         .then(scoreResult => {
@@ -475,9 +474,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     // If Supabase is configured, also persist score to Supabase database in background
-    if (supabase && isSupabaseConfigured) {
+    const scoreCfg = getSupabaseConfig();
+    const scoreClient = scoreCfg.isConfigured ? createLiveSupabaseClient(scoreCfg.url, scoreCfg.key) : null;
+    if (scoreClient) {
       Promise.resolve(
-        supabase
+        scoreClient
           .from('golf_scores')
           .insert({
             user_id: currentUser.id,
@@ -1018,7 +1019,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         resetToDefaultData,
         toastMessage,
         showToast,
-        isSupabaseConnected: isSupabaseConfigured
+        isSupabaseConnected: Boolean(getSupabaseConfig().isConfigured)
       }}
     >
       {children}

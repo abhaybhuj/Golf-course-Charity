@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ShieldCheck, User, Globe, RotateCcw, Sparkles, LogIn, UserPlus, Copy, Check, Database, RefreshCw, AlertCircle, Key, ExternalLink } from 'lucide-react';
 import { UserRole, NavigationTab } from '../types';
-import { supabase, isSupabaseConfigured, getSupabaseConfig, createLiveSupabaseClient } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured, getSupabaseConfig, createLiveSupabaseClient, sanitizeSupabaseUrl, sanitizeAnonKey } from '../lib/supabaseClient';
 
 interface RoleSwitcherBarProps {
   currentTab?: NavigationTab;
@@ -39,16 +39,23 @@ export const RoleSwitcherBar: React.FC<RoleSwitcherBarProps> = ({ currentTab, on
   });
 
   const saveAndApplyKeys = () => {
-    if (customUrl) localStorage.setItem('supabase_custom_url', customUrl.trim());
-    if (customKey) localStorage.setItem('supabase_custom_key', customKey.trim());
+    const cleanUrl = sanitizeSupabaseUrl(customUrl);
+    const cleanKey = sanitizeAnonKey(customKey);
+    setCustomUrl(cleanUrl);
+    setCustomKey(cleanKey);
+    if (cleanUrl) localStorage.setItem('supabase_custom_url', cleanUrl);
+    if (cleanKey) localStorage.setItem('supabase_custom_key', cleanKey);
     showToast('Saved Supabase credentials! Re-testing...');
-    runConnectionTest(customUrl.trim(), customKey.trim());
+    runConnectionTest(cleanUrl, cleanKey);
   };
 
   const runConnectionTest = async (overrideUrl?: string, overrideKey?: string) => {
     setTesting(true);
-    const activeUrl = overrideUrl || customUrl || import.meta.env.VITE_SUPABASE_URL || 'https://hsujhwellraoznlmrqvc.supabase.co';
-    const activeKey = overrideKey || customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+    const rawUrl = overrideUrl || customUrl || import.meta.env.VITE_SUPABASE_URL || 'https://hsujhwellraoznlmrqvc.supabase.co';
+    const rawKey = overrideKey || customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    const activeUrl = sanitizeSupabaseUrl(rawUrl);
+    const activeKey = sanitizeAnonKey(rawKey);
 
     setTestResults({
       envDetected: Boolean(activeUrl && activeKey),
