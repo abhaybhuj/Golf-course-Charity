@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --dh-dark: #0A0A0B;
+    --dh-lime: #C1FF72;
+  }
+
+  body {
+    background-color: #0A0A0B;
+    color: #F8FAFC;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}

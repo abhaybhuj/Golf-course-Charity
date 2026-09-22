@@ -375,6 +375,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     courseName?: string,
     notes?: string
   ): { success: boolean; error?: string } => {
+    // §04 Subscription Access check: inactive users cannot enter new scores
+    if (currentUser.subscription.status !== 'active') {
+      return {
+        success: false,
+        error: 'Your subscription is currently inactive. You can view your dashboard, but an active membership is required to enter new scores and participate in prize draws.'
+      };
+    }
+
     if (points < 1 || points > 45 || isNaN(points)) {
       return { success: false, error: 'Stableford score must be between 1 and 45 points.' };
     }
@@ -382,12 +390,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: 'Date is required for golf score.' };
     }
 
-    // Duplicate date check
+    // Duplicate date check: §05 Block entry of multiple scores for the same date
     const existingDate = currentUser.scores.find(s => s.date === date);
     if (existingDate) {
       return {
         success: false,
-        error: `Only one score entry is permitted per date. You already have a score of ${existingDate.points} pts on ${date}. Please edit or delete that entry instead.`
+        error: 'A score already exists for this date.'
       };
     }
 
@@ -435,7 +443,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (duplicate) {
       return {
         success: false,
-        error: `Another score is already recorded for ${date}. Only one score per date is allowed.`
+        error: 'A score already exists for this date.'
       };
     }
 
@@ -580,12 +588,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       winningNumbers = Array.from(selected).sort((a, b) => a - b);
     }
 
-    // Now evaluate every subscriber with 5 scores
+    // Now evaluate every subscriber with 5 scores (strictly active subscribers only per §04)
     const tier5Winners: { userId: string; name: string; numbers: number[]; matches: number[] }[] = [];
     const tier4Winners: { userId: string; name: string; numbers: number[]; matches: number[] }[] = [];
     const tier3Winners: { userId: string; name: string; numbers: number[]; matches: number[] }[] = [];
 
     allSubscribers.forEach(sub => {
+      // Inactive subscribers can view the dashboard but cannot participate in draws (§04)
+      if (sub.subscription.status !== 'active') return;
       if (sub.scores.length === 0) return;
       const userNumbers = sub.scores.map(s => s.points);
       const matches = userNumbers.filter(n => winningNumbers.includes(n));

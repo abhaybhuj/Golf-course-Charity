@@ -73,7 +73,7 @@ function AppContent() {
   }, [role]);
 
   return (
-    <div className="min-h-screen bg-[#0b0f14] text-slate-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-300">
+    <div className="min-h-screen bg-[#0A0A0B] text-slate-100 flex flex-col selection:bg-[#C1FF72]/30 selection:text-[#C1FF72]">
       {/* 1. Evaluator Quick Switcher Bar */}
       <RoleSwitcherBar currentTab={currentTab} onNavigateTab={setCurrentTab} />
 

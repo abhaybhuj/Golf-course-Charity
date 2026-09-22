@@ -201,7 +201,59 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
         </div>
       </div>
 
-      {/* Tab 1: Overview & Participation Summary (§10) */}
+      {/* Inactive Subscription Warning Banner (§04) */}
+      {currentUser.subscription.status !== 'active' && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold text-white">Inactive Subscription: </span>
+              Your subscription is currently {currentUser.subscription.status}. You can inspect your past dashboard data, but score submissions and prize draw entries are locked until resumed.
+            </div>
+          </div>
+          <button
+            onClick={resumeSubscription}
+            className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl shrink-0 transition-colors cursor-pointer"
+          >
+            Reactivate Membership
+          </button>
+        </div>
+      )}
+
+      {/* Hero Charity Feature Section (Part 2: Charity First prominence) */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border border-rose-500/30 relative overflow-hidden shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono font-semibold">
+              <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-500/30" />
+              <span>PRIMARY MISSION · CHARITABLE IMPACT</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Giving Back Through Every Swing
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Every month, <span className="text-white font-semibold">{currentUser.charityPercentage}%</span> of your subscription goes directly to <span className="text-rose-300 font-bold">{selectedCharity.name}</span>. You have powered <span className="text-white font-mono font-bold">${currentUser.totalDonated.toLocaleString()}</span> in impact so far.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
+            <button
+              onClick={() => onOpenDonateModal(selectedCharity.id)}
+              className="px-4 py-2.5 bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-500/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Boost Donation</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('charity')}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Manage Cause ({currentUser.charityPercentage}%)</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          </div>
+        </div>
+      </div>
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Key Metric Tiles */}
@@ -257,11 +309,22 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
               </div>
 
               <button
-                onClick={() => onOpenScoreModal(null)}
-                className="self-start sm:self-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => {
+                  if (currentUser.subscription.status !== 'active') {
+                    return;
+                  }
+                  onOpenScoreModal(null);
+                }}
+                disabled={currentUser.subscription.status !== 'active'}
+                className={`self-start sm:self-auto px-4 py-2 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors ${
+                  currentUser.subscription.status === 'active'
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                }`}
+                title={currentUser.subscription.status === 'active' ? 'Log a new round' : 'Reactivate subscription to log new rounds'}
               >
                 <Plus className="w-4 h-4" />
-                <span>Log New Round</span>
+                <span>{currentUser.subscription.status === 'active' ? 'Log New Round' : 'Inactive (Locked)'}</span>
               </button>
             </div>
 
@@ -314,11 +377,20 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
             </div>
 
             <button
-              onClick={() => onOpenScoreModal(null)}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+              onClick={() => {
+                if (currentUser.subscription.status !== 'active') return;
+                onOpenScoreModal(null);
+              }}
+              disabled={currentUser.subscription.status !== 'active'}
+              className={`px-4 py-2.5 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 self-start sm:self-auto ${
+                currentUser.subscription.status === 'active'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20 cursor-pointer'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              }`}
+              title={currentUser.subscription.status === 'active' ? 'Log a new round' : 'Reactivate subscription to log new rounds'}
             >
               <Plus className="w-4 h-4" />
-              <span>Log Stableford Round (1-45 pts)</span>
+              <span>{currentUser.subscription.status === 'active' ? 'Log Stableford Round (1-45 pts)' : 'Score Entry Locked (Inactive)'}</span>
             </button>
           </div>
 
